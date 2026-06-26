@@ -45,51 +45,71 @@ panes.
 > reply or an approval that leads to tool use clears it); they never fire for an
 > *idle* or *turn-finished* state, so those markers persist until you engage.
 
-A tab is only marked while it is **not** the active tab. If Claude finishes while
-you're already looking at the tab, it won't nag; focusing a marked tab clears it.
+The marker reflects hook state, not which tab you're looking at: zellij 0.44 emits
+no plugin event when you switch tabs, so focus can't be tracked reliably. A marker
+clears when the session reports `working` (you replied, or a tool ran after you
+approved it) or `gone` (the session ended) — not merely by viewing the tab.
 
 The plugin auto-launches (headless) the first time a hook pipes to it — you don't
 need to add it to a layout.
 
 ## Install
 
+**Prerequisites:** zellij 0.44.x (the plugin ABI is pinned to it), a Rust
+toolchain (`rustup`/`cargo`), and Claude Code.
+
+### 1. Build & place the plugin
+
+zellij loads a plugin from a `.wasm` file referenced by a `file:`/`https:`
+location. The convention is to keep local plugins in `~/.config/zellij/plugins/`;
+the installer builds the wasm and drops it there alongside the hook script:
+
 ```sh
 ./install.sh
 ```
 
-This builds `claude-monitor.wasm` and copies it plus the hook to
-`~/.config/zellij/plugins/`.
+This runs `cargo build --release --target wasm32-wasip1` and copies
+`claude-monitor.wasm` + `claude-zellij-hook.sh` to `~/.config/zellij/plugins/`
+(adding the `wasm32-wasip1` target if needed). You don't register the plugin in a
+layout — it auto-launches headless the first time a hook pipes to it.
 
-Then add this to `~/.claude/settings.json` (merges with your existing config):
+### 2. Wire up the Claude Code hooks
+
+Add this to `~/.claude/settings.json` (it merges with your existing config). The
+`$HOME` in each command is expanded by the shell that runs the hook:
 
 ```json
 {
   "hooks": {
     "Notification": [
-      { "matcher": "*", "hooks": [ { "type": "command", "command": "/home/christian/.config/zellij/plugins/claude-zellij-hook.sh busy", "async": true } ] }
+      { "matcher": "*", "hooks": [ { "type": "command", "command": "$HOME/.config/zellij/plugins/claude-zellij-hook.sh busy", "async": true } ] }
     ],
     "Stop": [
-      { "matcher": "*", "hooks": [ { "type": "command", "command": "/home/christian/.config/zellij/plugins/claude-zellij-hook.sh needs_input", "async": true } ] }
+      { "matcher": "*", "hooks": [ { "type": "command", "command": "$HOME/.config/zellij/plugins/claude-zellij-hook.sh needs_input", "async": true } ] }
     ],
     "PreToolUse": [
-      { "matcher": "*", "hooks": [ { "type": "command", "command": "/home/christian/.config/zellij/plugins/claude-zellij-hook.sh working", "async": true } ] }
+      { "matcher": "*", "hooks": [ { "type": "command", "command": "$HOME/.config/zellij/plugins/claude-zellij-hook.sh working", "async": true } ] }
     ],
     "PostToolUse": [
-      { "matcher": "*", "hooks": [ { "type": "command", "command": "/home/christian/.config/zellij/plugins/claude-zellij-hook.sh working", "async": true } ] }
+      { "matcher": "*", "hooks": [ { "type": "command", "command": "$HOME/.config/zellij/plugins/claude-zellij-hook.sh working", "async": true } ] }
     ],
     "UserPromptSubmit": [
-      { "matcher": "*", "hooks": [ { "type": "command", "command": "/home/christian/.config/zellij/plugins/claude-zellij-hook.sh working", "async": true } ] }
+      { "matcher": "*", "hooks": [ { "type": "command", "command": "$HOME/.config/zellij/plugins/claude-zellij-hook.sh working", "async": true } ] }
     ],
     "SessionEnd": [
-      { "matcher": "*", "hooks": [ { "type": "command", "command": "/home/christian/.config/zellij/plugins/claude-zellij-hook.sh gone", "async": true } ] }
+      { "matcher": "*", "hooks": [ { "type": "command", "command": "$HOME/.config/zellij/plugins/claude-zellij-hook.sh gone", "async": true } ] }
     ]
   }
 }
 ```
 
+### 3. First run
+
 Start a Claude Code session inside a zellij tab. **The first time the plugin
 loads, zellij shows a permission prompt** (ReadApplicationState +
 ChangeApplicationState) — press `y` to grant it once. After that it's silent.
+Hooks are read at session start, so restart any sessions that were already running
+when you edited `settings.json`.
 
 ## Configuration
 
@@ -133,3 +153,24 @@ zellij action start-or-reload-plugin file:$HOME/.config/zellij/plugins/claude-mo
 > toolchains, a `cdylib` builds a WASI *command* module (with `_start`) that
 > zellij rejects with "could not find exported function". The bin target builds
 > the reactor module zellij loads.
+
+### Layout & tests
+
+The workspace splits into two crates:
+
+- the root `claude-monitor` bin — the wasm plugin; wires zellij's
+  `PaneManifest`/`TabInfo` into the marker logic and calls the host.
+- [`core/`](core/) (`claude-monitor-core`) — the pure marker logic (status
+  precedence, marker strip/apply), deliberately free of `zellij-tile` so it
+  builds and unit-tests on the host. (`zellij-tile` drags in host-only system
+  libs that don't compile off-wasm, which is why the logic is split out.)
+
+```sh
+cargo test -p claude-monitor-core   # unit tests, run on the host
+cargo fmt --all -- --check          # formatting
+cargo clippy -p claude-monitor-core -- -D warnings
+```
+
+CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs those checks,
+builds the wasm plugin (uploading `claude-monitor.wasm` as an artifact), and
+shellchecks the scripts on every push and PR.

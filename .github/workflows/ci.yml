@@ -1,0 +1,56 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  test:
+    name: Test core logic
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      # Only the dependency-free core crate is host-testable; the wasm bin pulls
+      # system libs (openssl) that don't build for the host target.
+      - run: cargo test -p claude-monitor-core --verbose
+
+  lint:
+    name: rustfmt + clippy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo fmt --all -- --check
+      - run: cargo clippy -p claude-monitor-core -- -D warnings
+
+  build-wasm:
+    name: Build wasm plugin
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-wasip1
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo build --release --target wasm32-wasip1 --bin claude-monitor
+      - uses: actions/upload-artifact@v4
+        with:
+          name: claude-monitor.wasm
+          path: target/wasm32-wasip1/release/claude-monitor.wasm
+          if-no-files-found: error
+
+  shellcheck:
+    name: Shellcheck hook + installer
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: shellcheck claude-zellij-hook.sh install.sh

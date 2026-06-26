@@ -20,16 +20,9 @@
 //! It deliberately does NOT key off the focused tab: in zellij 0.44 switching tabs
 //! emits no plugin event, so any focus-based logic would be unreliable.
 
+use claude_monitor_core::{PaneStatus, desired_name, tab_status};
 use std::collections::{BTreeMap, HashMap};
 use zellij_tile::prelude::*;
-
-/// What a pane's Claude session currently wants. Absent from the map = nothing to
-/// show. `Needs` (red) outranks `Busy` (yellow) when a tab holds several panes.
-#[derive(Debug, Clone, Copy, PartialEq)]
-enum PaneStatus {
-    Needs,
-    Busy,
-}
 
 #[derive(Default)]
 struct State {
@@ -49,30 +42,19 @@ struct State {
 }
 
 impl State {
-    /// Strip whichever status marker (if any) currently prefixes a tab name, leaving
-    /// the user's base name untouched.
-    fn strip_markers<'a>(&self, name: &'a str) -> &'a str {
-        name.strip_prefix(&self.needs_marker)
-            .or_else(|| name.strip_prefix(&self.busy_marker))
-            .unwrap_or(name)
-    }
-
-    /// Highest-priority status among a tab's non-plugin panes: `Needs` (red) outranks
-    /// `Busy` (yellow); `None` means clear.
-    fn tab_status(&self, position: usize) -> Option<PaneStatus> {
-        let panes = self.panes.panes.get(&position)?;
-        let mut busy = false;
-        for p in panes {
-            if p.is_plugin {
-                continue;
-            }
-            match self.status.get(&p.id) {
-                Some(PaneStatus::Needs) => return Some(PaneStatus::Needs),
-                Some(PaneStatus::Busy) => busy = true,
-                None => {}
-            }
-        }
-        busy.then_some(PaneStatus::Busy)
+    /// The Claude status of each non-plugin pane in the tab at `position`.
+    fn tab_pane_statuses(&self, position: usize) -> Vec<Option<PaneStatus>> {
+        self.panes
+            .panes
+            .get(&position)
+            .map(|panes| {
+                panes
+                    .iter()
+                    .filter(|p| !p.is_plugin)
+                    .map(|p| self.status.get(&p.id).copied())
+                    .collect()
+            })
+            .unwrap_or_default()
     }
 
     /// Bring every tab name in line with its panes' Claude status.
@@ -80,17 +62,10 @@ impl State {
         // Global kill switch: flip to false to strip every marker and add none.
         const ENABLED: bool = true;
         for tab in &self.tabs {
-            let base = self.strip_markers(&tab.name).to_string();
-            let status = if ENABLED {
-                self.tab_status(tab.position)
-            } else {
-                None
-            };
-            let desired = match status {
-                Some(PaneStatus::Needs) => format!("{}{}", self.needs_marker, base),
-                Some(PaneStatus::Busy) => format!("{}{}", self.busy_marker, base),
-                None => base,
-            };
+            let status = ENABLED
+                .then(|| tab_status(self.tab_pane_statuses(tab.position)))
+                .flatten();
+            let desired = desired_name(&tab.name, status, &self.needs_marker, &self.busy_marker);
             if desired != tab.name {
                 // Target by STABLE tab_id, not position: the server indexes
                 // rename_tab's positional argument differently from
@@ -147,15 +122,13 @@ impl ZellijPlugin for State {
             .get("status")
             .map(String::as_str)
             .unwrap_or("needs_input");
-        match status {
-            "needs_input" => {
-                self.status.insert(pane, PaneStatus::Needs);
+        match PaneStatus::from_hook(status) {
+            // needs_input -> Needs (red), busy -> Busy (yellow).
+            Some(s) => {
+                self.status.insert(pane, s);
             }
-            "busy" => {
-                self.status.insert(pane, PaneStatus::Busy);
-            }
-            // "working", "gone", anything else -> clear.
-            _ => {
+            // working, gone, anything else -> clear.
+            None => {
                 self.status.remove(&pane);
             }
         }

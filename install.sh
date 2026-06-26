@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Build and install the claude-monitor zellij plugin + hook.
 set -euo pipefail
-cd "$(dirname "$0")"
+cd "$(dirname "$0")" || exit 1
 
 TARGET=wasm32-wasip1
 DEST="$HOME/.config/zellij/plugins"

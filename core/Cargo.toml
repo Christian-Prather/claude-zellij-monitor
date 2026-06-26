@@ -1,0 +1,14 @@
+[package]
+name = "claude-monitor-core"
+version = "0.1.0"
+edition = "2024"
+description = "Pure, host-testable marker logic for the claude-monitor zellij plugin"
+
+# Intentionally has NO dependencies. The wasm plugin crate depends on zellij-tile,
+# which transitively pulls host-only system libs (openssl) that don't build on the
+# host target — so the unit-testable logic lives here, free of that, and CI runs
+# `cargo test -p claude-monitor-core` on the host while building the wasm bin
+# separately.
+
+[lib]
+path = "src/lib.rs"

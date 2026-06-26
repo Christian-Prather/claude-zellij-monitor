@@ -15,6 +15,12 @@ path = "src/main.rs"
 [dependencies]
 # Pin to the exact zellij version you run — the WASM host ABI must match.
 zellij-tile = "0.44.3"
+# Pure marker logic, split out so it unit-tests on the host (zellij-tile pulls
+# host-only system libs that don't build off-wasm). See core/.
+claude-monitor-core = { path = "core" }
+
+[workspace]
+members = ["core"]
 
 [profile.release]
 opt-level = "s"
