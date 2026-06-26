@@ -25,8 +25,17 @@ zellij tab bar:  "  build  " → "🔴 build  "
 
 - **Notification** → `needs_input` (permission prompt or idle).
 - **Stop** → `needs_input` (turn finished, waiting on you).
+- **PreToolUse** → `working` (a tool is about to run → marker cleared promptly).
+- **PostToolUse** → `working` (the tool finished → marker stays cleared).
 - **UserPromptSubmit** → `working` (you replied → marker cleared).
 - **SessionEnd** → `gone` (Claude no longer running in that pane).
+
+> `PreToolUse`/`PostToolUse` are what clear the marker after you **approve a
+> permission prompt** — approving isn't a new prompt, so `UserPromptSubmit`
+> doesn't fire, but the approved tool then runs and these do. `PreToolUse`
+> clears it as soon as the tool starts; `PostToolUse` keeps it cleared after it
+> finishes. They only fire when a tool actually executes, so they never clear an
+> *idle* or *turn-finished* red (those have no tool running until you reply).
 
 A tab is only marked while it is **not** the active tab. If Claude finishes while
 you're already looking at the tab, it won't nag; focusing a marked tab clears it.
@@ -53,6 +62,12 @@ Then add this to `~/.claude/settings.json` (merges with your existing config):
     ],
     "Stop": [
       { "matcher": "*", "hooks": [ { "type": "command", "command": "/home/christian/.config/zellij/plugins/claude-zellij-hook.sh needs_input", "async": true } ] }
+    ],
+    "PreToolUse": [
+      { "matcher": "*", "hooks": [ { "type": "command", "command": "/home/christian/.config/zellij/plugins/claude-zellij-hook.sh working", "async": true } ] }
+    ],
+    "PostToolUse": [
+      { "matcher": "*", "hooks": [ { "type": "command", "command": "/home/christian/.config/zellij/plugins/claude-zellij-hook.sh working", "async": true } ] }
     ],
     "UserPromptSubmit": [
       { "matcher": "*", "hooks": [ { "type": "command", "command": "/home/christian/.config/zellij/plugins/claude-zellij-hook.sh working", "async": true } ] }
