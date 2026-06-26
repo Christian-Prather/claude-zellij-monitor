@@ -73,6 +73,22 @@ This runs `cargo build --release --target wasm32-wasip1` and copies
 (adding the `wasm32-wasip1` target if needed). You don't register the plugin in a
 layout — it auto-launches headless the first time a hook pipes to it.
 
+<details>
+<summary>No Rust toolchain? Install the prebuilt release instead.</summary>
+
+Each tagged release attaches both files, so you can skip the build (replace
+`OWNER/REPO` with this repo's slug):
+
+```sh
+mkdir -p ~/.config/zellij/plugins
+base="https://github.com/OWNER/REPO/releases/latest/download"
+curl -fsSL "$base/claude-monitor.wasm"      -o ~/.config/zellij/plugins/claude-monitor.wasm
+curl -fsSL "$base/claude-zellij-hook.sh"    -o ~/.config/zellij/plugins/claude-zellij-hook.sh
+chmod +x ~/.config/zellij/plugins/claude-zellij-hook.sh
+```
+
+</details>
+
 ### 2. Wire up the Claude Code hooks
 
 Add this to `~/.claude/settings.json` (it merges with your existing config). The
@@ -173,4 +189,6 @@ cargo clippy -p claude-monitor-core -- -D warnings
 
 CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs those checks,
 builds the wasm plugin (uploading `claude-monitor.wasm` as an artifact), and
-shellchecks the scripts on every push and PR.
+shellchecks the scripts on every push and PR. Pushing a `v*` tag triggers
+[`release.yml`](.github/workflows/release.yml), which builds the plugin and
+attaches `claude-monitor.wasm` + the hook to a GitHub Release.

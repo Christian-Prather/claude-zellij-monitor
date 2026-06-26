@@ -1,0 +1,35 @@
+name: Release
+
+# Cut a release by pushing a tag, e.g.:
+#   git tag v0.1.0 && git push origin v0.1.0
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write # needed to create the release and upload assets
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  release:
+    name: Build wasm and publish release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-wasip1
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo build --release --target wasm32-wasip1 --bin claude-monitor
+      - run: cp target/wasm32-wasip1/release/claude-monitor.wasm claude-monitor.wasm
+      # Attach both the plugin and the hook so a release can be installed without
+      # a Rust toolchain (download both into ~/.config/zellij/plugins/).
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            claude-monitor.wasm
+            claude-zellij-hook.sh
+          generate_release_notes: true
+          fail_on_unmatched_files: true
