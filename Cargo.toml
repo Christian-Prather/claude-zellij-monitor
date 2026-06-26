@@ -1,0 +1,22 @@
+[package]
+name = "claude-monitor"
+version = "0.1.0"
+edition = "2024"
+description = "Zellij plugin that marks tabs whose Claude Code session needs your input"
+
+# Built as a wasm bin (not a cdylib): on current Rust toolchains the cdylib
+# crate-type produces a WASI *command* module (with `_start`) that zellij cannot
+# load as a plugin. A `[[bin]]` built for wasm32-wasip1 produces the reactor
+# module zellij expects. register_plugin! supplies the entry point.
+[[bin]]
+name = "claude-monitor"
+path = "src/main.rs"
+
+[dependencies]
+# Pin to the exact zellij version you run — the WASM host ABI must match.
+zellij-tile = "0.44.3"
+
+[profile.release]
+opt-level = "s"
+lto = "fat"
+codegen-units = 1
