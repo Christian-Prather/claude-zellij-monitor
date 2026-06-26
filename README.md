@@ -55,14 +55,27 @@ need to add it to a layout.
 
 ## Install
 
-**Prerequisites:** zellij 0.44.x (the plugin ABI is pinned to it), a Rust
-toolchain (`rustup`/`cargo`), and Claude Code.
+**Prerequisites:** zellij 0.44.x (the plugin ABI is pinned to it) and Claude Code.
 
-### 1. Build & place the plugin
+### 1. Download & place the plugin
 
 zellij loads a plugin from a `.wasm` file referenced by a `file:`/`https:`
-location. The convention is to keep local plugins in `~/.config/zellij/plugins/`;
-the installer builds the wasm and drops it there alongside the hook script:
+location; the convention is to keep local plugins in `~/.config/zellij/plugins/`.
+Each tagged release attaches the prebuilt wasm and the hook script, so grab both:
+
+```sh
+mkdir -p ~/.config/zellij/plugins
+base="https://github.com/Christian-Prather/claude-zellij-monitor/releases/latest/download"
+curl -fsSL "$base/claude-monitor.wasm"   -o ~/.config/zellij/plugins/claude-monitor.wasm
+curl -fsSL "$base/claude-zellij-hook.sh" -o ~/.config/zellij/plugins/claude-zellij-hook.sh
+chmod +x ~/.config/zellij/plugins/claude-zellij-hook.sh
+```
+
+You don't register the plugin in a layout — it auto-launches headless the first
+time a hook pipes to it.
+
+<details>
+<summary>Prefer to build from source? (needs a Rust toolchain)</summary>
 
 ```sh
 ./install.sh
@@ -70,21 +83,8 @@ the installer builds the wasm and drops it there alongside the hook script:
 
 This runs `cargo build --release --target wasm32-wasip1` and copies
 `claude-monitor.wasm` + `claude-zellij-hook.sh` to `~/.config/zellij/plugins/`
-(adding the `wasm32-wasip1` target if needed). You don't register the plugin in a
-layout — it auto-launches headless the first time a hook pipes to it.
-
-<details>
-<summary>No Rust toolchain? Install the prebuilt release instead.</summary>
-
-Each tagged release attaches both files, so you can skip the build:
-
-```sh
-mkdir -p ~/.config/zellij/plugins
-base="https://github.com/Christian-Prather/claude-zellij-monitor/releases/latest/download"
-curl -fsSL "$base/claude-monitor.wasm"      -o ~/.config/zellij/plugins/claude-monitor.wasm
-curl -fsSL "$base/claude-zellij-hook.sh"    -o ~/.config/zellij/plugins/claude-zellij-hook.sh
-chmod +x ~/.config/zellij/plugins/claude-zellij-hook.sh
-```
+(adding the `wasm32-wasip1` target if needed) — same destination as the download
+above.
 
 </details>
 
