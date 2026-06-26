@@ -1,9 +1,9 @@
 # claude-zellij-monitor
 
 Monitor any number of Claude Code sessions running in zellij tabs, and see at a
-glance which ones need your input — the tab name gets a 🔴 marker the moment a
-session asks for a permission, goes idle, or finishes a turn. The marker clears
-automatically when you switch to that tab or reply.
+glance which ones want you — the tab name gets a 🔴 marker the moment a session
+finishes its turn (your move), and a 🟡 marker while it wants permission or has
+gone idle. The marker clears automatically when you reply or a tool runs.
 
 No dashboard pane, no polling, no screen-scraping. Detection rides on Claude
 Code's own hooks; the marker is painted by a tiny headless zellij plugin.
@@ -23,19 +23,27 @@ claude-monitor (headless WASM plugin)
 zellij tab bar:  "  build  " → "🔴 build  "
 ```
 
-- **Notification** → `needs_input` (permission prompt or idle).
-- **Stop** → `needs_input` (turn finished, waiting on you).
+- **Notification** → `busy` (🟡 — wants permission, or idle).
+- **Stop** → `needs_input` (🔴 — turn finished, your move).
 - **PreToolUse** → `working` (a tool is about to run → marker cleared promptly).
 - **PostToolUse** → `working` (the tool finished → marker stays cleared).
 - **UserPromptSubmit** → `working` (you replied → marker cleared).
 - **SessionEnd** → `gone` (Claude no longer running in that pane).
 
-> `PreToolUse`/`PostToolUse` are what clear the marker after you **approve a
-> permission prompt** — approving isn't a new prompt, so `UserPromptSubmit`
-> doesn't fire, but the approved tool then runs and these do. `PreToolUse`
-> clears it as soon as the tool starts; `PostToolUse` keeps it cleared after it
-> finishes. They only fire when a tool actually executes, so they never clear an
-> *idle* or *turn-finished* red (those have no tool running until you reply).
+`needs_input` (🔴) outranks `busy` (🟡) when a single tab holds several Claude
+panes.
+
+> **Why two colors.** Claude Code emits *no* hook when you **approve** a tool, so
+> a pending permission prompt and an approved-but-still-running command look
+> identical to the plugin. Rather than show an urgent 🔴 for a session that's
+> actually just churning (e.g. watching a long CI job after you approved it),
+> permission/idle `Notification`s read as 🟡 *busy*, and only `Stop` — the turn
+> genuinely finished — reads as 🔴. The trade-off: a permission prompt you
+> haven't approved yet shows 🟡, not 🔴.
+>
+> `PreToolUse`/`PostToolUse` clear the marker once a tool actually runs (so a
+> reply or an approval that leads to tool use clears it); they never fire for an
+> *idle* or *turn-finished* state, so those markers persist until you engage.
 
 A tab is only marked while it is **not** the active tab. If Claude finishes while
 you're already looking at the tab, it won't nag; focusing a marked tab clears it.
@@ -58,7 +66,7 @@ Then add this to `~/.claude/settings.json` (merges with your existing config):
 {
   "hooks": {
     "Notification": [
-      { "matcher": "*", "hooks": [ { "type": "command", "command": "/home/christian/.config/zellij/plugins/claude-zellij-hook.sh needs_input", "async": true } ] }
+      { "matcher": "*", "hooks": [ { "type": "command", "command": "/home/christian/.config/zellij/plugins/claude-zellij-hook.sh busy", "async": true } ] }
     ],
     "Stop": [
       { "matcher": "*", "hooks": [ { "type": "command", "command": "/home/christian/.config/zellij/plugins/claude-zellij-hook.sh needs_input", "async": true } ] }
@@ -85,14 +93,17 @@ ChangeApplicationState) — press `y` to grant it once. After that it's silent.
 
 ## Configuration
 
-- **Marker:** defaults to `🔴 `. To change it, launch the plugin from a layout
-  with a config key instead of relying on auto-launch:
+- **Markers:** `marker` is the 🔴 needs-you (Stop) marker, default `🔴 `;
+  `busy_marker` is the 🟡 busy (Notification) marker, default `🟡 `. To change
+  either, launch the plugin from a layout with config keys instead of relying on
+  auto-launch:
 
   ```kdl
   // somewhere in your zellij layout
   pane size=1 borderless=true {
       plugin location="file:/home/christian/.config/zellij/plugins/claude-monitor.wasm" {
-          marker "● "
+          marker "🔴 "
+          busy_marker "🟡 "
       }
   }
   ```
