@@ -76,12 +76,11 @@ layout — it auto-launches headless the first time a hook pipes to it.
 <details>
 <summary>No Rust toolchain? Install the prebuilt release instead.</summary>
 
-Each tagged release attaches both files, so you can skip the build (replace
-`OWNER/REPO` with this repo's slug):
+Each tagged release attaches both files, so you can skip the build:
 
 ```sh
 mkdir -p ~/.config/zellij/plugins
-base="https://github.com/OWNER/REPO/releases/latest/download"
+base="https://github.com/Christian-Prather/claude-zellij-monitor/releases/latest/download"
 curl -fsSL "$base/claude-monitor.wasm"      -o ~/.config/zellij/plugins/claude-monitor.wasm
 curl -fsSL "$base/claude-zellij-hook.sh"    -o ~/.config/zellij/plugins/claude-zellij-hook.sh
 chmod +x ~/.config/zellij/plugins/claude-zellij-hook.sh
